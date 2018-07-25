@@ -8,7 +8,6 @@ import (
 	"github.com/pkg/errors"
 	"kubevirt.io/containerized-data-importer/pkg/image"
 	"path/filepath"
-	"fmt"
 )
 
 var formatTable = map[string]func(string, string) (string, error){
@@ -21,7 +20,6 @@ var formatTable = map[string]func(string, string) (string, error){
 
 // create file based on targetFormat extensions and return created file's name.
 // note: intermediate files are removed.
-// TODO the path is retuning with the first section /Users/ missing.  I think the URL package is considering /Users/ as the server
 func FormatTestData(srcFile, tgtDir string, targetFormats ...string) (string, error) {
 	var err error
 	for _, tf := range targetFormats {
@@ -77,9 +75,7 @@ func xzCmd(src, tgtDir string) (string, error) {
 
 func qcow2Cmd(srcfile, tgtDir string) (string, error) {
 	tgt := strings.Replace(filepath.Base(srcfile), ".iso", image.ExtQcow2, 1)
-	fmt.Printf("[fileConversion.go:L80] %s<%T>: %+v\n", "tgt", tgt, tgt)
 	tgt = filepath.Join(tgtDir, tgt)
-	fmt.Printf("[fileConversion.go:L82] %s<%T>: %+v\n", "tgt", tgt, tgt)
 	args := []string{"convert", "-f", "raw", "-O", "qcow2", srcfile, tgt}
 
 	if err := doCmdAndVerifyFile(tgt, "qemu-img", args...); err != nil {
@@ -100,7 +96,6 @@ func doCmdAndVerifyFile(tgt, cmd string, args ...string) error {
 	if err := doCmd(cmd, args...); err != nil {
 		return err
 	}
-	fmt.Printf("Verifying file creation\n")
 	if _, err := os.Stat(tgt); err != nil {
 		return errors.Wrapf(err, "Failed to stat file %q", tgt)
 	}
@@ -108,19 +103,17 @@ func doCmdAndVerifyFile(tgt, cmd string, args ...string) error {
 }
 
 func doCmd(osCmd string, osArgs ...string) error {
-	fmt.Printf("command: %s %s\n", osCmd, osArgs)
 	cmd := exec.Command(osCmd, osArgs...)
 	cout, err := cmd.CombinedOutput()
 	if err != nil {
 		return errors.Wrapf(err, "OS command `%s %v` errored: %v\nStdout/Stderr: %s", osCmd, strings.Join(osArgs, " "), err, string(cout))
 	}
-	fmt.Printf("Command succeeded\n")
 	return nil
 }
 
 // copyIfNotPresent checks for the src file in the tgtDir.  If it is not there, it attempts to copy if from src to tgtdir.
 // If a copy is performed, the path to the copy is returned.
-// If no copy is performed, the original src string is returned.
+// If the file already exists, no copy is done and the path to the existing file is returned
 func copyIfNotPresent(src, tgtDir string) (string, error) {
 	base := filepath.Base(src)
 	// Only copy the source image if it does not exist in the temp directory
@@ -128,7 +121,6 @@ func copyIfNotPresent(src, tgtDir string) (string, error) {
 		if err := doCmd("cp", "-f", src, tgtDir); err != nil {
 			return "", err
 		}
-		src = filepath.Join(tgtDir, base)
 	}
-	return src, nil
+	return filepath.Join(tgtDir, base), nil
 }
